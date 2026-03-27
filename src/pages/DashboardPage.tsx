@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../firebase';
 import { ref as dbRef, onValue, update, push, set, get } from 'firebase/database';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { format, addDays, subDays, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, parseISO } from 'date-fns';
+import { format, addDays, subDays, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, parseISO, startOfDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { CheckCircle, Circle, ChevronLeft, ChevronRight, LogOut, BookOpen, Calendar as CalendarIcon, Sparkles, Bot, Home, FileText, BookMarked, Plus, Upload, File, Image as ImageIcon, X, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -18,6 +18,9 @@ interface Task {
   pagesToRead?: number;
   bookName?: string;
   description?: string;
+  lesson?: string;
+  amount?: number;
+  unit?: 'sayfa' | 'soru';
 }
 
 export default function DashboardPage({ username, onLogout }: { username: string, onLogout: () => void }) {
@@ -27,8 +30,6 @@ export default function DashboardPage({ username, onLogout }: { username: string
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dailyTasks, setDailyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [aiTip, setAiTip] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
 
   // Global Tasks State (for Calendar and Homework)
   const [allTasks, setAllTasks] = useState<Record<string, Record<string, Task>>>({});
@@ -38,10 +39,19 @@ export default function DashboardPage({ username, onLogout }: { username: string
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
 
+  // Report State
+  const [lastReportAt, setLastReportAt] = useState<number | null>(null);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportText, setReportText] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+
   // Homework State
   const [hwTitle, setHwTitle] = useState('');
   const [hwDate, setHwDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [hwDesc, setHwDesc] = useState('');
+  const [hwLesson, setHwLesson] = useState('');
+  const [hwAmount, setHwAmount] = useState<number | ''>('');
+  const [hwUnit, setHwUnit] = useState<'sayfa' | 'soru'>('sayfa');
   const [showHwForm, setShowHwForm] = useState(false);
 
   // Calendar State
@@ -90,6 +100,18 @@ export default function DashboardPage({ username, onLogout }: { username: string
       }
     });
 
+    get(dbRef(db, `users/${username}/reportInfo`)).then(snap => {
+      if (snap.exists()) {
+        setLastReportAt(snap.val().lastReportAt);
+      }
+    });
+
+    get(dbRef(db, `users/${username}/isAdmin`)).then(snap => {
+      if (snap.exists()) {
+        setIsAdmin(snap.val() === true);
+      }
+    });
+
     return () => unsubAll();
   }, [username]);
 
@@ -103,46 +125,79 @@ export default function DashboardPage({ username, onLogout }: { username: string
     }
   };
 
-  const getAITip = async () => {
-    if (dailyTasks.length === 0) return;
-    setAiLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const taskListStr = dailyTasks.map(t => `- ${t.title} (${t.completed ? 'Tamamlandı' : 'Bekliyor'})`).join('\n');
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Benim adım ${username}. Bugünkü görevlerim şunlar:\n${taskListStr}\n\nBana bu görevlerime bakarak kısa, 2 cümlelik motive edici ve akıllıca bir çalışma tavsiyesi ver. Türkçe konuş. Samimi ve enerjik bir dil kullan.`,
-      });
-      
-      setAiTip(response.text || 'Harika gidiyorsun! Çalışmaya devam et.');
-    } catch (error) {
-      console.error("AI Error:", error);
-      setAiTip("Bugün harika işler başaracaksın! Odaklan ve adım adım ilerle.");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   const handleAddHomework = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hwTitle || !hwDate) return;
     
     try {
-      const taskId = push(dbRef(db, `users/${username}/tasks/${hwDate}`)).key;
-      await update(dbRef(db, `users/${username}/tasks/${hwDate}/${taskId}`), {
-        title: hwTitle,
-        type: 'homework',
-        date: hwDate,
-        description: hwDesc,
-        completed: false,
-        createdAt: Date.now()
+      const startDate = new Date();
+      const endDate = parseISO(hwDate);
+      
+      if (startOfDay(endDate) < startOfDay(startDate)) {
+        alert("Bitiş tarihi bugünden önce olamaz.");
+        return;
+      }
+
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
+      const totalAmount = Number(hwAmount) || 0;
+      
+      const updates: any = {};
+
+      days.forEach((day, index) => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const taskId = push(dbRef(db, `users/${username}/tasks/${dateStr}`)).key;
+        
+        let finalAmount = 0;
+        if (totalAmount > 0) {
+           const baseAmount = Math.floor(totalAmount / days.length);
+           const remainder = totalAmount % days.length;
+           finalAmount = baseAmount + (index < remainder ? 1 : 0);
+        }
+
+        updates[`users/${username}/tasks/${dateStr}/${taskId}`] = {
+          title: hwLesson ? `${hwLesson} - ${hwTitle}` : hwTitle,
+          type: 'homework',
+          date: dateStr,
+          description: hwDesc,
+          lesson: hwLesson,
+          amount: finalAmount > 0 ? finalAmount : null,
+          unit: finalAmount > 0 ? hwUnit : null,
+          completed: false,
+          createdAt: Date.now()
+        };
       });
+
+      await update(dbRef(db), updates);
+
       setHwTitle('');
       setHwDesc('');
+      setHwLesson('');
+      setHwAmount('');
+      setHwUnit('sayfa');
       setShowHwForm(false);
     } catch (error) {
       console.error("Error adding homework:", error);
+    }
+  };
+
+  const handleAddReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportText || !username) return;
+
+    try {
+      const now = Date.now();
+      const reportId = push(dbRef(db, `users/${username}/reports`)).key;
+      await update(dbRef(db, `users/${username}/reports/${reportId}`), {
+        text: reportText,
+        createdAt: now
+      });
+      await set(dbRef(db, `users/${username}/reportInfo`), { lastReportAt: now });
+      setLastReportAt(now);
+      setReportText('');
+      setShowReportForm(false);
+      alert("Ders raporunuz başarıyla kaydedildi!");
+    } catch (error) {
+      console.error("Error adding report:", error);
     }
   };
 
@@ -151,7 +206,7 @@ export default function DashboardPage({ username, onLogout }: { username: string
     if (!file || !username) return;
     
     // Check 10-day cooldown
-    if (lastUploadAt && Date.now() - lastUploadAt < 10 * 24 * 60 * 60 * 1000) {
+    if (!isAdmin && lastUploadAt && Date.now() - lastUploadAt < 10 * 24 * 60 * 60 * 1000) {
       const daysLeft = Math.ceil((10 * 24 * 60 * 60 * 1000 - (Date.now() - lastUploadAt)) / (1000 * 60 * 60 * 24));
       alert(`Yeni bir program yüklemek için ${daysLeft} gün beklemelisiniz.`);
       return;
@@ -257,7 +312,15 @@ export default function DashboardPage({ username, onLogout }: { username: string
 
   const handleDeleteSchedule = async () => {
     if (!username) return;
-    const confirmDelete = window.confirm("Mevcut ders programını sıfırlamak istediğinize emin misiniz? (Yeni program eklemek için son yüklemeden itibaren 10 gün geçmiş olması gerekir)");
+    
+    const isOnCooldown = !isAdmin && lastUploadAt && (Date.now() - lastUploadAt < 10 * 24 * 60 * 60 * 1000);
+    if (isOnCooldown) {
+      const daysLeft = Math.ceil((10 * 24 * 60 * 60 * 1000 - (Date.now() - lastUploadAt!)) / (1000 * 60 * 60 * 24));
+      alert(`Yeni bir program yüklemek için ${daysLeft} gün beklemelisiniz. Şu an programı sıfırlayamazsınız.`);
+      return;
+    }
+
+    const confirmDelete = window.confirm("Mevcut ders programını sıfırlamak istediğinize emin misiniz?");
     if (!confirmDelete) return;
     
     try {
@@ -284,7 +347,7 @@ export default function DashboardPage({ username, onLogout }: { username: string
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-violet-500" />
             <div className="flex items-center justify-between w-full">
-              <button onClick={() => { setSelectedDate(subDays(selectedDate, 1)); setAiTip(null); }} className="p-2 rounded-full hover:bg-gray-50 text-gray-400">
+              <button onClick={() => { setSelectedDate(subDays(selectedDate, 1)); }} className="p-2 rounded-full hover:bg-gray-50 text-gray-400">
                 <ChevronLeft className="w-6 h-6" />
               </button>
               <div className="flex flex-col items-center text-center">
@@ -295,7 +358,7 @@ export default function DashboardPage({ username, onLogout }: { username: string
                   {format(selectedDate, 'd MMM', { locale: tr })}
                 </span>
               </div>
-              <button onClick={() => { setSelectedDate(addDays(selectedDate, 1)); setAiTip(null); }} className="p-2 rounded-full hover:bg-gray-50 text-gray-400">
+              <button onClick={() => { setSelectedDate(addDays(selectedDate, 1)); }} className="p-2 rounded-full hover:bg-gray-50 text-gray-400">
                 <ChevronRight className="w-6 h-6" />
               </button>
             </div>
@@ -331,39 +394,6 @@ export default function DashboardPage({ username, onLogout }: { username: string
             </div>
           </motion.div>
         </div>
-
-        {/* AI Coach Section */}
-        {dailyTasks.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-[28px] p-5 border border-indigo-100/50 shadow-sm relative overflow-hidden"
-          >
-            <div className="absolute -right-10 -top-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="flex items-center justify-between relative z-10 mb-3">
-              <div className="flex items-center space-x-3">
-                <div className="bg-white p-2.5 rounded-xl shadow-sm border border-indigo-100">
-                  <Bot className="w-5 h-5 text-indigo-600" />
-                </div>
-                <h3 className="text-base font-bold text-gray-900 tracking-tight">Yapay Zeka Koçu</h3>
-              </div>
-              {!aiTip && (
-                <button onClick={getAITip} disabled={aiLoading} className="flex items-center px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-all disabled:opacity-50">
-                  {aiLoading ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1.5" /> : <Sparkles className="w-3 h-3 mr-1.5" />}
-                  Tavsiye
-                </button>
-              )}
-            </div>
-            <AnimatePresence>
-              {aiTip && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-indigo-100 text-gray-800 text-sm font-medium leading-relaxed shadow-sm">
-                  {aiTip}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        )}
 
         {/* Tasks List */}
         <motion.div 
@@ -414,7 +444,9 @@ export default function DashboardPage({ username, onLogout }: { username: string
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${task.completed ? 'bg-gray-100 text-gray-500' : 'bg-orange-50 text-orange-700'}`}>Ders</span>
                           )}
                           {task.type === 'homework' && (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${task.completed ? 'bg-gray-100 text-gray-500' : 'bg-rose-50 text-rose-700'}`}>Ödev</span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${task.completed ? 'bg-gray-100 text-gray-500' : 'bg-rose-50 text-rose-700'}`}>
+                              Ödev {task.amount ? `(${task.amount} ${task.unit})` : ''}
+                            </span>
                           )}
                         </div>
                       </div>
@@ -424,6 +456,51 @@ export default function DashboardPage({ username, onLogout }: { username: string
               </AnimatePresence>
             </ul>
           )}
+        </motion.div>
+
+        {/* Lesson Report Section */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="bg-white rounded-[28px] shadow-sm border border-gray-100 overflow-hidden mt-6"
+        >
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center tracking-tight">
+              <FileText className="w-4 h-4 mr-2 text-indigo-500" />
+              Ders Raporu
+            </h2>
+          </div>
+          <div className="p-5">
+            {(!isAdmin && lastReportAt && (Date.now() - lastReportAt < 7 * 24 * 60 * 60 * 1000)) ? (
+              <div className="bg-indigo-50 text-indigo-700 p-4 rounded-xl text-sm font-medium text-center">
+                Raporunuz başarıyla kaydedildi. Yeni bir rapor eklemek için <b>{Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - lastReportAt)) / (1000 * 60 * 60 * 24))} gün</b> beklemelisiniz.
+              </div>
+            ) : (
+              <div>
+                {showReportForm ? (
+                  <form onSubmit={handleAddReport} className="space-y-3">
+                    <textarea 
+                      value={reportText} 
+                      onChange={e => setReportText(e.target.value)} 
+                      rows={3} 
+                      required
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm" 
+                      placeholder="Bu hafta neler öğrendiniz? Hangi konularda zorlandınız?" 
+                    />
+                    <div className="flex space-x-2">
+                      <button type="button" onClick={() => setShowReportForm(false)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-200 transition-colors">İptal</button>
+                      <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md hover:bg-indigo-700 transition-colors">Raporu Gönder</button>
+                    </div>
+                  </form>
+                ) : (
+                  <button onClick={() => setShowReportForm(true)} className="w-full py-3 bg-indigo-50 text-indigo-600 text-sm font-semibold rounded-xl hover:bg-indigo-100 transition-colors flex items-center justify-center">
+                    <Plus className="w-4 h-4 mr-2" /> Yeni Ders Raporu Ekle
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </motion.div>
       </div>
     );
@@ -507,6 +584,14 @@ export default function DashboardPage({ username, onLogout }: { username: string
     const pendingHw = allHw.filter(t => !t.completed);
     const completedHw = allHw.filter(t => t.completed);
 
+    // Extract unique lessons
+    const uniqueLessons = Array.from(new Set(
+      Object.values(allTasks)
+        .flatMap(dayTasks => Object.values(dayTasks) as Task[])
+        .filter(task => task.type === 'lesson')
+        .map(task => task.title.replace(' Dersi', ''))
+    )).sort();
+
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -532,6 +617,28 @@ export default function DashboardPage({ username, onLogout }: { username: string
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Son Teslim Tarihi</label>
                   <input type="date" required value={hwDate} onChange={e => setHwDate(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm" />
                 </div>
+                <div className="flex space-x-4">
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Miktar (İsteğe Bağlı)</label>
+                    <input type="number" min="1" value={hwAmount} onChange={e => setHwAmount(e.target.value ? Number(e.target.value) : '')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm" placeholder="Örn: 50" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Birim</label>
+                    <select value={hwUnit} onChange={e => setHwUnit(e.target.value as 'sayfa' | 'soru')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm">
+                      <option value="sayfa">Sayfa</option>
+                      <option value="soru">Soru</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Ders (İsteğe Bağlı)</label>
+                  <select value={hwLesson} onChange={e => setHwLesson(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm">
+                    <option value="">Ders Seçin...</option>
+                    {uniqueLessons.map(lesson => (
+                      <option key={lesson} value={lesson}>{lesson}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Açıklama (İsteğe Bağlı)</label>
                   <textarea value={hwDesc} onChange={e => setHwDesc(e.target.value)} rows={2} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm" placeholder="Sayfa 45-50 arası..." />
@@ -552,9 +659,11 @@ export default function DashboardPage({ username, onLogout }: { username: string
                 <div key={hw.id} className="bg-white p-4 rounded-2xl border border-rose-100 shadow-sm flex items-start">
                   <button onClick={() => toggleTask(hw, hw.date)} className="mt-0.5 mr-3"><Circle className="w-6 h-6 text-gray-300 hover:text-rose-400" /></button>
                   <div>
-                    <h4 className="text-sm font-bold text-gray-900">{hw.title}</h4>
+                    <h4 className="text-sm font-bold text-gray-900">
+                      {hw.title} {hw.amount ? <span className="text-indigo-600 font-semibold ml-1">({hw.amount} {hw.unit})</span> : ''}
+                    </h4>
                     {hw.description && <p className="text-xs text-gray-600 mt-1">{hw.description}</p>}
-                    <div className="mt-2 inline-flex items-center px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-md">Son: {format(parseISO(hw.date), 'd MMM yyyy', { locale: tr })}</div>
+                    <div className="mt-2 inline-flex items-center px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-md">Tarih: {format(parseISO(hw.date), 'd MMM yyyy', { locale: tr })}</div>
                   </div>
                 </div>
               ))}
@@ -570,7 +679,9 @@ export default function DashboardPage({ username, onLogout }: { username: string
                 <div key={hw.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-start">
                   <button onClick={() => toggleTask(hw, hw.date)} className="mt-0.5 mr-3"><CheckCircle className="w-6 h-6 text-green-500" /></button>
                   <div>
-                    <h4 className="text-sm font-bold text-gray-500 line-through">{hw.title}</h4>
+                    <h4 className="text-sm font-bold text-gray-500 line-through">
+                      {hw.title} {hw.amount ? <span className="text-gray-400 font-semibold ml-1">({hw.amount} {hw.unit})</span> : ''}
+                    </h4>
                   </div>
                 </div>
               ))}
@@ -582,7 +693,7 @@ export default function DashboardPage({ username, onLogout }: { username: string
   };
 
   const renderScheduleTab = () => {
-    const isOnCooldown = lastUploadAt && (Date.now() - lastUploadAt < 10 * 24 * 60 * 60 * 1000);
+    const isOnCooldown = !isAdmin && lastUploadAt && (Date.now() - lastUploadAt < 10 * 24 * 60 * 60 * 1000);
     const daysLeft = isOnCooldown ? Math.ceil((10 * 24 * 60 * 60 * 1000 - (Date.now() - lastUploadAt!)) / (1000 * 60 * 60 * 24)) : 0;
 
     return (
@@ -596,9 +707,11 @@ export default function DashboardPage({ username, onLogout }: { username: string
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-gray-600">Mevcut Program Durumu</span>
-                <button onClick={handleDeleteSchedule} className="flex items-center px-3 py-1.5 bg-rose-50 text-rose-600 text-xs font-semibold rounded-lg hover:bg-rose-100 transition-colors">
-                  <Trash2 className="w-3 h-3 mr-1.5" /> Programı Sıfırla
-                </button>
+                {!isOnCooldown && (
+                  <button onClick={handleDeleteSchedule} className="flex items-center px-3 py-1.5 bg-rose-50 text-rose-600 text-xs font-semibold rounded-lg hover:bg-rose-100 transition-colors">
+                    <Trash2 className="w-3 h-3 mr-1.5" /> Programı Sıfırla
+                  </button>
+                )}
               </div>
               
               <div className="flex flex-col items-center justify-center p-8 bg-green-50 rounded-xl border border-green-200 text-center">
@@ -607,8 +720,8 @@ export default function DashboardPage({ username, onLogout }: { username: string
                 <p className="text-xs font-medium text-green-600 mb-4">Dersleriniz takviminize başarıyla işlendi.</p>
                 
                 {isOnCooldown && (
-                  <div className="bg-white/60 px-4 py-2 rounded-lg text-xs text-green-700 font-medium">
-                    Yeni bir program yüklemek için <b>{daysLeft} gün</b> beklemelisiniz.
+                  <div className="bg-white/80 px-5 py-3 rounded-xl border border-green-200 text-sm text-green-800 font-bold shadow-sm">
+                    Yeniden program yükleyebilmek için <span className="text-green-600 text-lg mx-1">{daysLeft}</span> gün kaldı.
                   </div>
                 )}
               </div>
@@ -653,7 +766,10 @@ export default function DashboardPage({ username, onLogout }: { username: string
             <div className="bg-indigo-600 p-2 rounded-xl shadow-sm shadow-indigo-200">
               <BookOpen className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">EduMind</h1>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-xl font-bold tracking-tight text-gray-900">EduMind</h1>
+              {isAdmin && <span className="bg-rose-100 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Admin</span>}
+            </div>
           </div>
           <button onClick={onLogout} className="flex items-center p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
             <LogOut className="w-5 h-5" />
