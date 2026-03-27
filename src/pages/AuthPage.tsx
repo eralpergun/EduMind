@@ -56,7 +56,8 @@ export default function AuthPage({ onLogin }: { onLogin: (username: string) => v
           await set(userRef, {
             password,
             createdAt: Date.now(),
-            onboardingCompleted: false
+            onboardingCompleted: false,
+            isAdmin: false
           });
           localStorage.setItem('edumind_user', cleanUsername);
           onLogin(cleanUsername);
@@ -80,7 +81,8 @@ export default function AuthPage({ onLogin }: { onLogin: (username: string) => v
       const setPromise = set(userRef, {
         isAnonymous: true,
         createdAt: Date.now(),
-        onboardingCompleted: false
+        onboardingCompleted: false,
+        isAdmin: false
       });
 
       await Promise.race([
