@@ -143,19 +143,48 @@ export default function DashboardPage({ username, onLogout }: { username: string
         return;
       }
 
-      const days = eachDayOfInterval({ start: startDate, end: endDate });
       const totalAmount = Number(hwAmount) || 0;
-      
+      let targetDays: Date[] = [];
+      const intervalDays = eachDayOfInterval({ start: startDate, end: endDate });
+
+      // If a lesson is selected, try to find days where the student has this lesson
+      if (hwLesson) {
+        targetDays = intervalDays.filter(day => {
+          const dateStr = format(day, 'yyyy-MM-dd');
+          const dayTasks = allTasks[dateStr] as Record<string, Task>;
+          if (!dayTasks) return false;
+          return Object.values(dayTasks).some(task => task.type === 'lesson' && task.title === `${hwLesson} Dersi`);
+        });
+      }
+
+      // If no lesson selected, or no matching days found, use all days
+      if (targetDays.length === 0) {
+        targetDays = [...intervalDays];
+      }
+
+      // If no amount is specified, just create one task on the deadline day (reminder)
+      if (totalAmount === 0) {
+        targetDays = [endDate];
+      } else {
+        // If there are multiple target days, exclude the deadline day so they finish it before
+        if (targetDays.length > 1) {
+          const lastTargetDay = targetDays[targetDays.length - 1];
+          if (isSameDay(lastTargetDay, endDate)) {
+            targetDays.pop();
+          }
+        }
+      }
+
       const updates: any = {};
 
-      days.forEach((day, index) => {
+      targetDays.forEach((day, index) => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const taskId = push(dbRef(db, `users/${username}/tasks/${dateStr}`)).key;
         
         let finalAmount = 0;
         if (totalAmount > 0) {
-           const baseAmount = Math.floor(totalAmount / days.length);
-           const remainder = totalAmount % days.length;
+           const baseAmount = Math.floor(totalAmount / targetDays.length);
+           const remainder = totalAmount % targetDays.length;
            finalAmount = baseAmount + (index < remainder ? 1 : 0);
         }
 
@@ -241,7 +270,7 @@ export default function DashboardPage({ username, onLogout }: { username: string
           { logger: m => console.log(m) }
         );
         text = data.text;
-        wordsData = data.words;
+        wordsData = (data as any).words;
       } else {
         text = await fileToUpload.text();
       }

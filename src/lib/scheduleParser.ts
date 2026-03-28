@@ -1,21 +1,21 @@
 export function parseScheduleFromText(text: string, wordsData?: any[]) {
   const dayMap: Record<string, number> = {
-    'pazartesi': 1, 'pzt': 1, 'pa': 1, 'ptesi': 1, 'ptes': 1, 'pazartes': 1, 'pazart': 1,
+    'pazartesi': 1, 'pzt': 1, 'pa': 1, 'ptesi': 1, 'ptes': 1, 'pazartes': 1, 'pazart': 1, 'pt': 1,
     'salı': 2, 'sali': 2, 'sa': 2, 'sl': 2, 'sal': 2,
-    'çarşamba': 3, 'carsamba': 3, 'çar': 3, 'ça': 3, 'çrş': 3, 'crs': 3, 'çarşamb': 3, 'carsamb': 3, 'çarş': 3, 'cars': 3,
-    'perşembe': 4, 'persembe': 4, 'per': 4, 'pe': 4, 'prş': 4, 'prs': 4, 'perşemb': 4, 'persemb': 4, 'perş': 4, 'pers': 4,
-    'cuma': 5, 'cum': 5, 'cu': 5,
+    'çarşamba': 3, 'carsamba': 3, 'çar': 3, 'ça': 3, 'çrş': 3, 'crs': 3, 'çarşamb': 3, 'carsamb': 3, 'çarş': 3, 'cars': 3, 'çr': 3, 'cr': 3,
+    'perşembe': 4, 'persembe': 4, 'per': 4, 'pe': 4, 'prş': 4, 'prs': 4, 'perşemb': 4, 'persemb': 4, 'perş': 4, 'pers': 4, 'pr': 4,
+    'cuma': 5, 'cum': 5, 'cu': 5, 'cm': 5,
     'cumartesi': 6, 'cmt': 6, 'ct': 6, 'ctesi': 6, 'ctes': 6, 'cumartes': 6, 'cumart': 6,
     'pazar': 0, 'paz': 0, 'pz': 0
   };
 
   const exactSubjectMap: Record<string, string> = {
     // Matematik
-    'mat': 'Matematik', 'matematik': 'Matematik', 'mt': 'Matematik', 'mte': 'Matematik', 'matm': 'Matematik',
+    'mat': 'Matematik', 'matematik': 'Matematik', 'mt': 'Matematik', 'mte': 'Matematik', 'matm': 'Matematik', 'matem': 'Matematik',
     'hsmat': 'Matematik (Kurs)', 'em7': 'Matematik (Etüt)', 'em8': 'Matematik (Etüt)', 'em6': 'Matematik (Etüt)', 'em5': 'Matematik (Etüt)',
     
     // Fen Bilimleri
-    'fb': 'Fen Bilimleri', 'fen': 'Fen Bilimleri', 'fenbil': 'Fen Bilimleri', 'fenbilimleri': 'Fen Bilimleri', 'fnb': 'Fen Bilimleri',
+    'fb': 'Fen Bilimleri', 'fen': 'Fen Bilimleri', 'fenbil': 'Fen Bilimleri', 'fenbilimleri': 'Fen Bilimleri', 'fnb': 'Fen Bilimleri', 'fenbilim': 'Fen Bilimleri',
     'hfb': 'Fen Bilimleri (Kurs)', 'ef7': 'Fen Bilimleri (Etüt)', 'ef8': 'Fen Bilimleri (Etüt)', 'ef6': 'Fen Bilimleri (Etüt)', 'ef5': 'Fen Bilimleri (Etüt)',
     
     // Türkçe / Edebiyat
@@ -24,27 +24,27 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
     'edb': 'Edebiyat', 'edebiyat': 'Edebiyat', 'tde': 'Türk Dili ve Edebiyatı', 'türkdiliveedebiyatı': 'Türk Dili ve Edebiyatı',
     
     // Yabancı Dil
-    'ing': 'İngilizce', 'i̇ng': 'İngilizce', 'ingilizce': 'İngilizce', 'yd': 'Yabancı Dil', 'yabancıdil': 'Yabancı Dil', 'ybd': 'Yabancı Dil',
+    'ing': 'İngilizce', 'i̇ng': 'İngilizce', 'ingilizce': 'İngilizce', 'yd': 'Yabancı Dil', 'yabancıdil': 'Yabancı Dil', 'ybd': 'Yabancı Dil', 'ingil': 'İngilizce', 'inglzc': 'İngilizce',
     'native': 'İngilizce (Native)', 'hi': 'İngilizce (Kurs)', 'hı': 'İngilizce (Kurs)',
     'alm': 'Almanca', 'almanca': 'Almanca',
     'fra': 'Fransızca', 'fransızca': 'Fransızca', 'fr': 'Fransızca',
     
     // Sosyal Bilgiler / Tarih / Coğrafya
-    'sb': 'Sosyal Bilgiler', 'sos': 'Sosyal Bilgiler', 'sosbil': 'Sosyal Bilgiler', 'sosyal': 'Sosyal Bilgiler', 'sosyalbilgiler': 'Sosyal Bilgiler',
+    'sb': 'Sosyal Bilgiler', 'sos': 'Sosyal Bilgiler', 'sosbil': 'Sosyal Bilgiler', 'sosyal': 'Sosyal Bilgiler', 'sosyalbilgiler': 'Sosyal Bilgiler', 'sosbilg': 'Sosyal Bilgiler',
     'es7': 'Sosyal Bilgiler (Etüt)', 'es8': 'Sosyal Bilgiler (Etüt)', 'es6': 'Sosyal Bilgiler (Etüt)', 'es5': 'Sosyal Bilgiler (Etüt)',
-    'hit': 'İnkılap Tarihi', 'hıt': 'İnkılap Tarihi', 'ink': 'İnkılap Tarihi', 'ita': 'İnkılap Tarihi', 'inkılap': 'İnkılap Tarihi', 'inkılaptarihi': 'İnkılap Tarihi', 'tcinkılaptarihi': 'İnkılap Tarihi', 'tcinkılaptarihiveatatürkçülük': 'İnkılap Tarihi',
+    'hit': 'İnkılap Tarihi', 'hıt': 'İnkılap Tarihi', 'ink': 'İnkılap Tarihi', 'ita': 'İnkılap Tarihi', 'inkılap': 'İnkılap Tarihi', 'inkılaptarihi': 'İnkılap Tarihi', 'tcinkılaptarihi': 'İnkılap Tarihi', 'tcinkılaptarihiveatatürkçülük': 'İnkılap Tarihi', 'inkilap': 'İnkılap Tarihi', 'inkilaptarihi': 'İnkılap Tarihi',
     'tar': 'Tarih', 'tarih': 'Tarih', 'trh': 'Tarih',
     'coğ': 'Coğrafya', 'cog': 'Coğrafya', 'coğrafya': 'Coğrafya', 'cğr': 'Coğrafya', 'cografya': 'Coğrafya',
     
     // Din Kültürü
-    'dkvab': 'Din Kültürü', 'din': 'Din Kültürü', 'dkab': 'Din Kültürü', 'dinkül': 'Din Kültürü', 'hdk': 'Din Kültürü (Kurs)', 'dinkültürü': 'Din Kültürü', 'dinkültürüveahlakbilgisi': 'Din Kültürü',
+    'dkvab': 'Din Kültürü', 'din': 'Din Kültürü', 'dkab': 'Din Kültürü', 'dinkül': 'Din Kültürü', 'hdk': 'Din Kültürü (Kurs)', 'dinkültürü': 'Din Kültürü', 'dinkültürüveahlakbilgisi': 'Din Kültürü', 'dinkultur': 'Din Kültürü', 'dinkulturu': 'Din Kültürü',
     
     // Sanat / Spor / Bilişim / Teknoloji
-    'gs': 'Görsel Sanatlar', 'görsel': 'Görsel Sanatlar', 'resim': 'Görsel Sanatlar', 'gör': 'Görsel Sanatlar', 'görselsanatlar': 'Görsel Sanatlar',
+    'gs': 'Görsel Sanatlar', 'görsel': 'Görsel Sanatlar', 'resim': 'Görsel Sanatlar', 'gör': 'Görsel Sanatlar', 'görselsanatlar': 'Görsel Sanatlar', 'gorsel': 'Görsel Sanatlar', 'gorselsanatlar': 'Görsel Sanatlar', 'görsan': 'Görsel Sanatlar',
     'müzik': 'Müzik', 'müz': 'Müzik', 'muz': 'Müzik', 'mz': 'Müzik', 'muzik': 'Müzik',
-    'be': 'Beden Eğitimi', 'beden': 'Beden Eğitimi', 'bed': 'Beden Eğitimi', 'spor': 'Beden Eğitimi', 'bes': 'Beden Eğitimi', 'bedeneğitimi': 'Beden Eğitimi', 'bedenegitimi': 'Beden Eğitimi', 'bedeneğitimivespor': 'Beden Eğitimi',
+    'be': 'Beden Eğitimi', 'beden': 'Beden Eğitimi', 'bed': 'Beden Eğitimi', 'spor': 'Beden Eğitimi', 'bes': 'Beden Eğitimi', 'bedeneğitimi': 'Beden Eğitimi', 'bedenegitimi': 'Beden Eğitimi', 'bedeneğitimivespor': 'Beden Eğitimi', 'bedenegt': 'Beden Eğitimi', 'bedeğt': 'Beden Eğitimi', 'bedeğit': 'Beden Eğitimi',
     'kod': 'Kodlama', 'bilişim': 'Bilişim Teknolojileri', 'bil': 'Bilişim Teknolojileri', 'yazılım': 'Yazılım', 'bty': 'Bilişim Teknolojileri', 'bilişimteknolojileri': 'Bilişim Teknolojileri',
-    'tt': 'Teknoloji Tasarım', 'tek': 'Teknoloji Tasarım', 'tektas': 'Teknoloji Tasarım', 'teknoloji': 'Teknoloji Tasarım', 'teknolojitasarım': 'Teknoloji Tasarım', 'teknolojivetasarım': 'Teknoloji Tasarım',
+    'tt': 'Teknoloji Tasarım', 'tek': 'Teknoloji Tasarım', 'tektas': 'Teknoloji Tasarım', 'teknoloji': 'Teknoloji Tasarım', 'teknolojitasarım': 'Teknoloji Tasarım', 'teknolojivetasarım': 'Teknoloji Tasarım', 'tektasarim': 'Teknoloji Tasarım',
     
     // İlkokul
     'hb': 'Hayat Bilgisi', 'hay': 'Hayat Bilgisi', 'hayat': 'Hayat Bilgisi', 'hayatbilgisi': 'Hayat Bilgisi',
@@ -135,7 +135,7 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
     if (dayNodes.length > 2) {
       const cxCounts: { cx: number, count: number, nodes: any[], uniqueDays: Set<number> }[] = [];
       const cyCounts: { cy: number, count: number, nodes: any[], uniqueDays: Set<number> }[] = [];
-      const tolerance = 60; // 60 pixels tolerance for alignment
+      const tolerance = 120; // 120 pixels tolerance for alignment to handle skewed images
 
       for (const dn of dayNodes) {
         let foundCx = false;
@@ -198,9 +198,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
         
         if (yDiff1 < 20 && yDiff2 < 20 && yDiff3 < 20) {
           const combo4 = t1 + t2 + t3 + t4;
-          if (exactSubjectMap[combo4]) {
+          const found4 = findSubject(combo4);
+          if (found4) {
             subjectNodes.push({
-              subject: exactSubjectMap[combo4],
+              subject: found4,
               cx: (w1.bbox.x0 + w4.bbox.x1) / 2,
               cy: (w1.bbox.y0 + w4.bbox.y1) / 2
             });
@@ -223,9 +224,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
         
         if (yDiff1 < 20 && yDiff2 < 20) {
           const combo3 = t1 + t2 + t3;
-          if (exactSubjectMap[combo3]) {
+          const found3 = findSubject(combo3);
+          if (found3) {
             subjectNodes.push({
-              subject: exactSubjectMap[combo3],
+              subject: found3,
               cx: (w1.bbox.x0 + w3.bbox.x1) / 2,
               cy: (w1.bbox.y0 + w3.bbox.y1) / 2
             });
@@ -245,9 +247,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
         
         if (yDiff < 20) {
           const combo2 = t1 + t2;
-          if (exactSubjectMap[combo2]) {
+          const found2 = findSubject(combo2);
+          if (found2) {
             subjectNodes.push({
-              subject: exactSubjectMap[combo2],
+              subject: found2,
               cx: (w1.bbox.x0 + w2.bbox.x1) / 2,
               cy: (w1.bbox.y0 + w2.bbox.y1) / 2
             });
@@ -362,10 +365,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
       // Try 4 words
       if (i <= words.length - 4) {
         const combo4 = words[i] + words[i+1] + words[i+2] + words[i+3];
-        if (exactSubjectMap[combo4]) {
-          const subject = exactSubjectMap[combo4];
-          if (!lessonsMap[subject]) lessonsMap[subject] = new Set();
-          lessonsMap[subject].add(currentDay);
+        const found4 = findSubject(combo4);
+        if (found4) {
+          if (!lessonsMap[found4]) lessonsMap[found4] = new Set();
+          lessonsMap[found4].add(currentDay);
           skipWords.add(i).add(i+1).add(i+2).add(i+3);
           continue;
         }
@@ -374,10 +377,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
       // Try 3 words
       if (i <= words.length - 3) {
         const combo3 = words[i] + words[i+1] + words[i+2];
-        if (exactSubjectMap[combo3]) {
-          const subject = exactSubjectMap[combo3];
-          if (!lessonsMap[subject]) lessonsMap[subject] = new Set();
-          lessonsMap[subject].add(currentDay);
+        const found3 = findSubject(combo3);
+        if (found3) {
+          if (!lessonsMap[found3]) lessonsMap[found3] = new Set();
+          lessonsMap[found3].add(currentDay);
           skipWords.add(i).add(i+1).add(i+2);
           continue;
         }
@@ -386,10 +389,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
       // Try 2 words
       if (i <= words.length - 2) {
         const combo2 = words[i] + words[i+1];
-        if (exactSubjectMap[combo2]) {
-          const subject = exactSubjectMap[combo2];
-          if (!lessonsMap[subject]) lessonsMap[subject] = new Set();
-          lessonsMap[subject].add(currentDay);
+        const found2 = findSubject(combo2);
+        if (found2) {
+          if (!lessonsMap[found2]) lessonsMap[found2] = new Set();
+          lessonsMap[found2].add(currentDay);
           skipWords.add(i).add(i+1);
           continue;
         }
