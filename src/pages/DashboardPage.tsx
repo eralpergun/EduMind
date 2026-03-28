@@ -8,91 +8,7 @@ import { CheckCircle, Circle, ChevronLeft, ChevronRight, LogOut, BookOpen, Calen
 import { motion, AnimatePresence } from 'motion/react';
 import imageCompression from 'browser-image-compression';
 import Tesseract from 'tesseract.js';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Set PDF.js worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-
-const parseScheduleText = (text: string) => {
-  const textLower = text.toLowerCase();
-  
-  const dayKeywords: Record<string, number> = {
-    'pazartesi': 1, 'pzt': 1, 'monday': 1, 'mon': 1, 'pa': 1,
-    'salı': 2, 'sali': 2, 'sal': 2, 'tuesday': 2, 'tue': 2, 'sa': 2,
-    'çarşamba': 3, 'carsamba': 3, 'çrş': 3, 'wednesday': 3, 'wed': 3, 'ça': 3, 'ca': 3,
-    'perşembe': 4, 'persembe': 4, 'prş': 4, 'thursday': 4, 'thu': 4, 'pe': 4,
-    'cuma': 5, 'cum': 5, 'friday': 5, 'fri': 5, 'cu': 5,
-    'cumartesi': 6, 'cmt': 6, 'saturday': 6, 'sat': 6,
-    'pazar': 0, 'paz': 0, 'sunday': 0, 'sun': 0
-  };
-
-  const lessonKeywords: Record<string, string> = {
-    'matematik': 'Matematik', 'mat': 'Matematik', 'math': 'Matematik', 'mathematics': 'Matematik', 'hsmat': 'Matematik',
-    'türkçe': 'Türkçe', 'turkce': 'Türkçe', 'tur': 'Türkçe', 'turkish': 'Türkçe', 'türkç': 'Türkçe', 'turkc': 'Türkçe', 'hst': 'Türkçe', 'hit': 'Türkçe',
-    'fen': 'Fen Bilimleri', 'science': 'Fen Bilimleri', 'sci': 'Fen Bilimleri', 'fb': 'Fen Bilimleri', 'hfb': 'Fen Bilimleri',
-    'sosyal': 'Sosyal Bilgiler', 'sos': 'Sosyal Bilgiler', 'social': 'Sosyal Bilgiler', 'sb': 'Sosyal Bilgiler', 'ss': 'Sosyal Bilgiler',
-    'ingilizce': 'İngilizce', 'ing': 'İngilizce', 'english': 'İngilizce', 'eng': 'İngilizce', 'native': 'İngilizce', 'hi': 'İngilizce',
-    'tarih': 'Tarih', 'tar': 'Tarih', 'history': 'Tarih', 'hist': 'Tarih',
-    'coğrafya': 'Coğrafya', 'cografya': 'Coğrafya', 'cog': 'Coğrafya', 'geography': 'Coğrafya', 'geo': 'Coğrafya',
-    'fizik': 'Fizik', 'fiz': 'Fizik', 'physics': 'Fizik', 'phy': 'Fizik',
-    'kimya': 'Kimya', 'kim': 'Kimya', 'chemistry': 'Kimya', 'chem': 'Kimya',
-    'biyoloji': 'Biyoloji', 'biy': 'Biyoloji', 'biology': 'Biyoloji', 'bio': 'Biyoloji',
-    'beden': 'Beden Eğitimi', 'bed': 'Beden Eğitimi', 'pe': 'Beden Eğitimi', 'be': 'Beden Eğitimi',
-    'müzik': 'Müzik', 'muzik': 'Müzik', 'muz': 'Müzik', 'music': 'Müzik',
-    'resim': 'Görsel Sanatlar', 'görsel': 'Görsel Sanatlar', 'art': 'Görsel Sanatlar', 'gs': 'Görsel Sanatlar',
-    'din': 'Din Kültürü', 'religion': 'Din Kültürü', 'dkvab': 'Din Kültürü', 'hdk': 'Din Kültürü',
-    'edebiyat': 'Edebiyat', 'edb': 'Edebiyat', 'literature': 'Edebiyat',
-    'felsefe': 'Felsefe', 'fel': 'Felsefe', 'philosophy': 'Felsefe',
-    'bilişim': 'Bilişim', 'bil': 'Bilişim', 'it': 'Bilişim', 'computer': 'Bilişim', 'kod': 'Bilişim',
-    'geometri': 'Geometri', 'geom': 'Geometri', 'geometry': 'Geometri',
-    'almanca': 'Almanca', 'alm': 'Almanca', 'german': 'Almanca',
-    'seçmeli': 'Seçmeli Ders', 'ks': 'Seçmeli Ders', 'em7': 'Seçmeli Ders', 'et7': 'Seçmeli Ders', 'es7': 'Seçmeli Ders', 'ef7': 'Seçmeli Ders'
-  };
-
-  const lessonsFound = new Map<string, Set<number>>();
-  const lines = textLower.split('\n');
-  
-  let currentDay = -1;
-  
-  for (const line of lines) {
-    const words = line.split(/[\s,.-]+/);
-    
-    let dayFoundInLine = -1;
-    for (const word of words) {
-      if (dayKeywords[word] !== undefined) {
-        dayFoundInLine = dayKeywords[word];
-        currentDay = dayFoundInLine;
-        break;
-      }
-    }
-    
-    for (const word of words) {
-      if (lessonKeywords[word]) {
-        const lessonName = lessonKeywords[word];
-        if (!lessonsFound.has(lessonName)) {
-          lessonsFound.set(lessonName, new Set());
-        }
-        if (currentDay !== -1) {
-          lessonsFound.get(lessonName)!.add(currentDay);
-        } else if (dayFoundInLine !== -1) {
-           lessonsFound.get(lessonName)!.add(dayFoundInLine);
-        }
-      }
-    }
-  }
-
-  const result: { title: string, daysOfWeek: number[] }[] = [];
-  
-  lessonsFound.forEach((daysSet, title) => {
-    let daysOfWeek = Array.from(daysSet);
-    if (daysOfWeek.length === 0) {
-      daysOfWeek = [1, 2, 3, 4, 5]; 
-    }
-    result.push({ title, daysOfWeek });
-  });
-
-  return { lessons: result };
-};
+import { parseScheduleFromText } from '../lib/scheduleParser';
 
 interface Task {
   id: string;
@@ -308,43 +224,29 @@ export default function DashboardPage({ username, onLogout }: { username: string
       const isImage = file.type.startsWith('image/');
       let fileToUpload = file;
 
-      // Compress image before upload (more aggressive for speed)
+      // Compress image before upload
       if (isImage) {
-        const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1024, useWebWorker: true };
+        const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
         fileToUpload = await imageCompression(file, options);
       }
 
-      // Local Analysis Task
-      let extractedText = "";
-
-      try {
-        if (isImage) {
-          const { data: { text } } = await Tesseract.recognize(fileToUpload, 'tur+eng');
-          extractedText = text;
-        } else if (fileToUpload.type === 'application/pdf') {
-          const arrayBuffer = await fileToUpload.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map((item: any) => item.str).join(' ');
-            extractedText += pageText + '\n';
-          }
-        } else {
-          const reader = new FileReader();
-          reader.readAsText(fileToUpload);
-          await new Promise(resolve => reader.onload = resolve);
-          extractedText = reader.result as string;
-        }
-      } catch (err) {
-        console.error("Dosya okuma hatası:", err);
-        setAlertMessage("Dosya okunurken bir hata oluştu. Lütfen geçerli bir resim veya PDF yükleyin.");
-        setUploading(false);
-        setAnalyzing(false);
-        return;
+      let text = "";
+      let wordsData: any[] | undefined = undefined;
+      
+      if (isImage) {
+        setAlertMessage("Görsel analiz ediliyor (Yapay zeka kullanılmıyor)...");
+        const { data } = await Tesseract.recognize(
+          fileToUpload,
+          'tur',
+          { logger: m => console.log(m) }
+        );
+        text = data.text;
+        wordsData = data.words;
+      } else {
+        text = await fileToUpload.text();
       }
 
-      const aiResult = parseScheduleText(extractedText);
+      const aiResult = parseScheduleFromText(text, wordsData);
 
       // Generate tasks for the next 30 days based on extracted lessons
       if (aiResult && aiResult.lessons && aiResult.lessons.length > 0) {
@@ -394,23 +296,19 @@ export default function DashboardPage({ username, onLogout }: { username: string
 
   const handleDeleteSchedule = async () => {
     if (!username) return;
-    
-    const isOnCooldown = !isAdmin && lastUploadAt && (Date.now() - lastUploadAt < 10 * 24 * 60 * 60 * 1000);
-    if (isOnCooldown) {
-      const daysLeft = Math.ceil((10 * 24 * 60 * 60 * 1000 - (Date.now() - lastUploadAt!)) / (1000 * 60 * 60 * 24));
-      setAlertMessage(`Yeni bir program yüklemek için ${daysLeft} gün beklemelisiniz. Şu an programı sıfırlayamazsınız.`);
-      return;
-    }
 
     setConfirmDialog({
-      message: "Mevcut ders programını sıfırlamak istediğinize emin misiniz?",
+      message: "Mevcut ders programını sıfırlamak istediğinize emin misiniz? Bu işlem geri alınamaz.",
       onConfirm: async () => {
         try {
           const updates: any = {};
+          let hasTasksToDelete = false;
+          
           Object.entries(allTasks).forEach(([dateStr, dayTasks]) => {
             Object.entries(dayTasks).forEach(([taskId, task]) => {
               if (task.type === 'lesson') {
                 updates[`users/${username}/tasks/${dateStr}/${taskId}`] = null;
+                hasTasksToDelete = true;
               }
             });
           });
@@ -420,10 +318,16 @@ export default function DashboardPage({ username, onLogout }: { username: string
           await update(dbRef(db), updates);
           setLastUploadAt(null);
           setConfirmDialog(null);
-          setAlertMessage("Ders programı başarıyla sıfırlandı!");
+          
+          if (hasTasksToDelete) {
+            setAlertMessage("Ders programı başarıyla sıfırlandı! Tüm dersler takvimden kaldırıldı.");
+          } else {
+            setAlertMessage("Ders programı sıfırlandı, ancak silinecek ders bulunamadı.");
+          }
         } catch (error) {
           console.error("Error deleting schedule:", error);
-          setAlertMessage("Sıfırlama sırasında bir hata oluştu.");
+          setAlertMessage("Sıfırlama sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+          setConfirmDialog(null);
         }
       }
     });
@@ -661,31 +565,6 @@ export default function DashboardPage({ username, onLogout }: { username: string
             <div className="flex items-center text-xs text-gray-600"><div className="w-2 h-2 rounded-full bg-rose-400 mr-2" /> Ödev</div>
           </div>
         </div>
-
-        {/* Modals */}
-        <AnimatePresence>
-          {alertMessage && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Bilgi</h3>
-                <p className="text-gray-600 text-sm mb-6">{alertMessage}</p>
-                <button onClick={() => setAlertMessage(null)} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-semibold">Tamam</button>
-              </motion.div>
-            </div>
-          )}
-          {confirmDialog && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Onay</h3>
-                <p className="text-gray-600 text-sm mb-6">{confirmDialog.message}</p>
-                <div className="flex space-x-3">
-                  <button onClick={() => setConfirmDialog(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold">İptal</button>
-                  <button onClick={confirmDialog.onConfirm} className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-semibold">Evet, Sıfırla</button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
       </div>
     );
   };
@@ -830,11 +709,9 @@ export default function DashboardPage({ username, onLogout }: { username: string
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-gray-600">Mevcut Program Durumu</span>
-                {!isOnCooldown && (
-                  <button onClick={handleDeleteSchedule} className="flex items-center px-3 py-1.5 bg-rose-50 text-rose-600 text-xs font-semibold rounded-lg hover:bg-rose-100 transition-colors">
-                    <Trash2 className="w-3 h-3 mr-1.5" /> Programı Sıfırla
-                  </button>
-                )}
+                <button onClick={handleDeleteSchedule} className="flex items-center px-3 py-1.5 bg-rose-50 text-rose-600 text-xs font-semibold rounded-lg hover:bg-rose-100 transition-colors">
+                  <Trash2 className="w-3 h-3 mr-1.5" /> Programı Sıfırla
+                </button>
               </div>
               
               <div className="flex flex-col items-center justify-center p-8 bg-green-50 rounded-xl border border-green-200 text-center">
@@ -854,7 +731,7 @@ export default function DashboardPage({ username, onLogout }: { username: string
               <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Sparkles className="w-8 h-8 text-indigo-400" />
               </div>
-              <h3 className="text-base font-bold text-gray-900 mb-2">Yapay Zeka ile Analiz</h3>
+              <h3 className="text-base font-bold text-gray-900 mb-2">Otomatik Program Analizi</h3>
               
               {isOnCooldown ? (
                 <div className="bg-orange-50 text-orange-700 p-4 rounded-xl text-sm font-medium mt-4">
@@ -862,7 +739,7 @@ export default function DashboardPage({ username, onLogout }: { username: string
                 </div>
               ) : (
                 <>
-                  <p className="text-sm text-gray-500 mb-6">Ders programınızı yükleyin, yapay zeka saniyeler içinde analiz edip dersleri takviminize otomatik eklesin. (Dosyanız hiçbir yere kaydedilmez, sadece analiz edilir.)</p>
+                  <p className="text-sm text-gray-500 mb-6">Ders programınızı yükleyin, sistemimiz saniyeler içinde analiz edip dersleri takviminize otomatik eklesin. (Dosyanız hiçbir yere kaydedilmez, sadece analiz edilir.)</p>
                   <label className="cursor-pointer inline-flex items-center px-5 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow-md hover:bg-indigo-700 transition-all">
                     {uploading ? (
                       <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" /> Analiz Ediliyor...</>
@@ -932,6 +809,31 @@ export default function DashboardPage({ username, onLogout }: { username: string
           </button>
         </div>
       </nav>
+
+      {/* Modals */}
+      <AnimatePresence>
+        {alertMessage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Bilgi</h3>
+              <p className="text-gray-600 text-sm mb-6">{alertMessage}</p>
+              <button onClick={() => setAlertMessage(null)} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-semibold">Tamam</button>
+            </motion.div>
+          </div>
+        )}
+        {confirmDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Onay</h3>
+              <p className="text-gray-600 text-sm mb-6">{confirmDialog.message}</p>
+              <div className="flex space-x-3">
+                <button onClick={() => setConfirmDialog(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-semibold">İptal</button>
+                <button onClick={confirmDialog.onConfirm} className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-semibold">Evet, Sıfırla</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
