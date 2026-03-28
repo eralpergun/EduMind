@@ -99,6 +99,18 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
     'flbiy': 'Fen Lisesi Biyoloji', 'fenlisesibiyoloji': 'Fen Lisesi Biyoloji'
   };
 
+  const sortedKeys = Object.keys(exactSubjectMap).sort((a, b) => b.length - a.length);
+  
+  const findSubject = (text: string) => {
+    if (exactSubjectMap[text]) return exactSubjectMap[text];
+    for (const key of sortedKeys) {
+      if (text.startsWith(key) && key.length >= 2) {
+        return exactSubjectMap[key];
+      }
+    }
+    return null;
+  };
+
   if (wordsData && wordsData.length > 0) {
     const dayNodes: any[] = [];
     const subjectNodes: any[] = [];
@@ -116,6 +128,48 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
           cx: (w.bbox.x0 + w.bbox.x1) / 2,
           cy: (w.bbox.y0 + w.bbox.y1) / 2
         });
+      }
+    }
+
+    // Filter dayNodes to remove false positives (like teacher initials 'sa')
+    if (dayNodes.length > 2) {
+      const cxCounts: { cx: number, count: number, nodes: any[], uniqueDays: Set<number> }[] = [];
+      const cyCounts: { cy: number, count: number, nodes: any[], uniqueDays: Set<number> }[] = [];
+      const tolerance = 60; // 60 pixels tolerance for alignment
+
+      for (const dn of dayNodes) {
+        let foundCx = false;
+        for (const c of cxCounts) {
+          if (Math.abs(c.cx - dn.cx) < tolerance) {
+            c.count++;
+            c.nodes.push(dn);
+            c.uniqueDays.add(dn.day);
+            foundCx = true;
+            break;
+          }
+        }
+        if (!foundCx) cxCounts.push({ cx: dn.cx, count: 1, nodes: [dn], uniqueDays: new Set([dn.day]) });
+
+        let foundCy = false;
+        for (const c of cyCounts) {
+          if (Math.abs(c.cy - dn.cy) < tolerance) {
+            c.count++;
+            c.nodes.push(dn);
+            c.uniqueDays.add(dn.day);
+            foundCy = true;
+            break;
+          }
+        }
+        if (!foundCy) cyCounts.push({ cy: dn.cy, count: 1, nodes: [dn], uniqueDays: new Set([dn.day]) });
+      }
+
+      cxCounts.sort((a, b) => b.uniqueDays.size - a.uniqueDays.size || b.count - a.count);
+      cyCounts.sort((a, b) => b.uniqueDays.size - a.uniqueDays.size || b.count - a.count);
+
+      if (cxCounts[0].uniqueDays.size >= cyCounts[0].uniqueDays.size) {
+        dayNodes.splice(0, dayNodes.length, ...cxCounts[0].nodes);
+      } else {
+        dayNodes.splice(0, dayNodes.length, ...cyCounts[0].nodes);
       }
     }
 
@@ -204,9 +258,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
       }
 
       // Try 1 word
-      if (exactSubjectMap[t1] && dayMap[t1] === undefined) {
+      const foundSubject = findSubject(t1);
+      if (foundSubject && dayMap[t1] === undefined) {
         subjectNodes.push({
-          subject: exactSubjectMap[t1],
+          subject: foundSubject,
           cx: (w1.bbox.x0 + w1.bbox.x1) / 2,
           cy: (w1.bbox.y0 + w1.bbox.y1) / 2
         });
@@ -342,10 +397,10 @@ export function parseScheduleFromText(text: string, wordsData?: any[]) {
       
       // Try 1 word
       const word = words[i];
-      if (exactSubjectMap[word]) {
-        const subject = exactSubjectMap[word];
-        if (!lessonsMap[subject]) lessonsMap[subject] = new Set();
-        lessonsMap[subject].add(currentDay);
+      const foundSubject = findSubject(word);
+      if (foundSubject) {
+        if (!lessonsMap[foundSubject]) lessonsMap[foundSubject] = new Set();
+        lessonsMap[foundSubject].add(currentDay);
       }
     }
   }
